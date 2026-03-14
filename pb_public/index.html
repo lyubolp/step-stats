@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Step Stats</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.x/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen" x-data="app()" x-init="init()">
+
+  <!-- Navigation -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-4xl mx-auto px-4">
+      <div class="flex items-center justify-between h-14">
+        <span class="font-semibold text-gray-800 tracking-tight">Step Stats</span>
+        <div class="flex gap-1">
+          <a href="#/" :class="navClass('/')" class="nav-link">Dashboard</a>
+          <a href="#/month" :class="navClass('/month')" class="nav-link">Month</a>
+          <a href="#/year" :class="navClass('/year')" class="nav-link">Year</a>
+          <a href="#/stats" :class="navClass('/stats')" class="nav-link">Stats</a>
+          <a href="#/settings" :class="navClass('/settings')" class="nav-link">Settings</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="max-w-4xl mx-auto px-4 py-6">
+
+    <!-- Loading -->
+    <div x-show="loading" class="flex justify-center items-center py-20">
+      <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+
+    <!-- Error -->
+    <div x-show="error && !loading" class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-6" x-text="error"></div>
+
+    <!-- Dashboard (#/) -->
+    <div x-show="route === '/' && !loading">
+      <div id="view-dashboard"></div>
+    </div>
+
+    <!-- Month View (#/month) -->
+    <div x-show="route === '/month' && !loading">
+      <div id="view-month"></div>
+    </div>
+
+    <!-- Year View (#/year) -->
+    <div x-show="route === '/year' && !loading">
+      <div id="view-year"></div>
+    </div>
+
+    <!-- Stats (#/stats) -->
+    <div x-show="route === '/stats' && !loading">
+      <div id="view-stats"></div>
+    </div>
+
+    <!-- Settings (#/settings) -->
+    <div x-show="route === '/settings' && !loading">
+      <div id="view-settings"></div>
+    </div>
+
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/stats.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

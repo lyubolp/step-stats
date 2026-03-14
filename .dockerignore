@@ -1,0 +1,21 @@
+# Git
+.git/
+.gitignore
+
+# Database and runtime data (mounted as volume)
+pb_data/
+
+# PocketBase binary (downloaded in Dockerfile)
+pocketbase
+
+# Docs
+README.md
+ARCHITECTURE.md
+LICENSE
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

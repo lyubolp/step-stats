@@ -1,0 +1,14 @@
+# PocketBase binary (download separately)
+pocketbase
+
+# Database and runtime data
+pb_data/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
