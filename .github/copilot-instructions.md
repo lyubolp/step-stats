@@ -75,7 +75,7 @@ step-stats/
 | `#/month`    | Calendar grid, monthly stats panel, bar chart              |
 | `#/year`     | Month-by-month table + bar chart, yearly progress          |
 | `#/stats`    | All-time stats: averages, best week, max day, streak       |
-| `#/settings` | Set yearly goal target                                     |
+| `#/settings` | Set yearly goal target, import/export step data as CSV     |
 
 ### Styling Rules
 - Use **Tailwind CSS utility classes** for all styling
@@ -177,6 +177,12 @@ All list calls pass `perPage: '500'` (monthly) or `perPage: '5000'` (all-time). 
 - Always call `_destroyChart(id)` before creating a new chart on the same canvas to avoid "Canvas already in use" errors
 - The month and year charts include a dashed orange goal line as a second dataset with `type: 'line'`
 - Chart tooltip labels are overridden to append `" steps"` for readability
+
+### CSV import / export
+- **Export**: `getStepsAsCSV()` in `api.js` fetches all steps via `getAllSteps()` and returns a `date,count` CSV string; the Settings view triggers a browser download of `steps.csv`.
+- **Import**: `importStepsFromRows(rows)` in `api.js` receives pre-parsed rows and upserts each one (create if the date is new, update if it already exists); returns `{ created, updated, errors }`.
+- **Parsing**: `parseStepsCSV(text)` in `app.js` splits the raw file text into rows, skips an optional header line, validates that each date matches `YYYY-MM-DD` and each count is a non-negative integer, and throws a descriptive error on bad input.
+- The import UI lives in the Settings view (`settingsComp`): a hidden `<input type="file" accept=".csv">` triggers `handleImport()`, which reads the file, parses it, calls `importStepsFromRows`, and displays a result summary (created / updated counts and any per-row errors).
 
 ---
 

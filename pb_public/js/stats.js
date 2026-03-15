@@ -110,6 +110,34 @@ function computeMonthlyProgress(steps, dailyGoalValue, year, month, today = new 
 // ─── Year progress ───────────────────────────────────────────────────────────
 
 /**
+ * Compute year-to-date progress and ahead/behind pace.
+ *
+ * @param {Array}  steps          - all step records for the year (YTD)
+ * @param {number} dailyGoalValue
+ * @param {number} year
+ * @param {Date}   [today]        - override for testing; defaults to new Date()
+ * @returns {Object}
+ */
+function computeYearlyProgress(steps, dailyGoalValue, year, today = new Date()) {
+  const yearGoal    = dailyGoalValue * daysInYear(year);
+  const actualYTD   = steps.reduce((s, r) => s + r.count, 0);
+
+  // Days elapsed from Jan 1 to today (inclusive), capped to days in year
+  const jan1        = new Date(year, 0, 1);
+  const todayLocal  = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const daysElapsed = Math.min(
+    Math.floor((todayLocal - jan1) / 86400000) + 1,
+    daysInYear(year)
+  );
+
+  const expectedYTD   = dailyGoalValue * daysElapsed;
+  const aheadBehind   = actualYTD - expectedYTD;
+  const pctCompletion = yearGoal > 0 ? (actualYTD / yearGoal) * 100 : 0;
+
+  return { yearGoal, actualYTD, expectedYTD, aheadBehind, pctCompletion, daysElapsed };
+}
+
+/**
  * Compute per-month summaries for a full year.
  *
  * @param {Array}  steps      - all step records for the year

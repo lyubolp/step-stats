@@ -22,22 +22,31 @@ const CHART_COLORS = {
   goalLine:  'rgba(249, 115, 22, 0.8)',
 };
 
-const BASE_OPTIONS = {
-  responsive: true,
-  maintainAspectRatio: true,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: ctx => ` ${ctx.parsed.y?.toLocaleString() ?? ctx.parsed.toLocaleString()} steps`,
+function _isDark() {
+  return document.documentElement.classList.contains('dark');
+}
+
+function _baseOptions() {
+  const dark      = _isDark();
+  const tickColor = dark ? '#94a3b8' : '#6b7280';
+  const gridColor = dark ? '#334155' : '#f3f4f6';
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.parsed.y?.toLocaleString() ?? ctx.parsed.toLocaleString()} steps`,
+        },
       },
     },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-    y: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
-  },
-};
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 11 }, color: tickColor } },
+      y: { grid: { color: gridColor }, ticks: { font: { size: 11 }, color: tickColor } },
+    },
+  };
+}
 
 // ─── Month bar chart ──────────────────────────────────────────────────────────
 
@@ -95,10 +104,10 @@ function renderMonthChart(canvasId, steps, dailyGoalValue, year, month) {
       ],
     },
     options: {
-      ...BASE_OPTIONS,
+      ..._baseOptions(),
       plugins: {
-        ...BASE_OPTIONS.plugins,
-        legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20 } },
+        ..._baseOptions().plugins,
+        legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20, color: _isDark() ? '#94a3b8' : '#6b7280' } },
         tooltip: {
           callbacks: {
             label: ctx => ` ${ctx.parsed.y?.toLocaleString()} steps`,
@@ -152,10 +161,10 @@ function renderYearChart(canvasId, breakdown) {
       ],
     },
     options: {
-      ...BASE_OPTIONS,
+      ..._baseOptions(),
       plugins: {
-        ...BASE_OPTIONS.plugins,
-        legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20 } },
+        ..._baseOptions().plugins,
+        legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20, color: _isDark() ? '#94a3b8' : '#6b7280' } },
       },
     },
   });
@@ -189,6 +198,6 @@ function renderAvgStepsChart(canvasId, monthlyAverages) {
         tension: 0.3,
       }],
     },
-    options: BASE_OPTIONS,
+    options: _baseOptions(),
   });
 }

@@ -100,6 +100,47 @@ async function deleteStep(id) {
   return _request('DELETE', `${API_BASE}/steps/records/${encodeURIComponent(id)}`);
 }
 
+/**
+ * Fetch all steps and return a CSV-formatted string (header + one row per record).
+ */
+async function getStepsAsCSV() {
+  const steps = await getAllSteps();
+  const lines = ['date,count'];
+  for (const s of steps) {
+    lines.push(`${s.date.slice(0, 10)},${s.count}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Upsert step records from pre-parsed CSV rows.
+ * @param {{ date: string, count: number }[]} rows
+ * @returns {{ created: number, updated: number, errors: string[] }}
+ */
+async function importStepsFromRows(rows) {
+  const existing = await getAllSteps();
+  const byDate = {};
+  for (const s of existing) {
+    byDate[s.date.slice(0, 10)] = s;
+  }
+  let created = 0, updated = 0;
+  const errors = [];
+  for (const row of rows) {
+    try {
+      if (byDate[row.date]) {
+        await updateStep(byDate[row.date].id, row.count);
+        updated++;
+      } else {
+        await createStep(row.date, row.count);
+        created++;
+      }
+    } catch (e) {
+      errors.push(`${row.date}: ${e.message}`);
+    }
+  }
+  return { created, updated, errors };
+}
+
 // ─── Goals ────────────────────────────────────────────────────────────────────
 
 /**

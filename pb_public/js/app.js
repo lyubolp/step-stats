@@ -20,21 +20,61 @@ function fmtDate(str) {
   return `${MONTH_NAMES_SHORT[m - 1]} ${d}, ${y}`;
 }
 
+/**
+ * Parse a CSV text (date,count) into an array of row objects.
+ * Skips a header line if present. Validates format strictly.
+ */
+function parseStepsCSV(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) throw new Error('The file is empty.');
+  const start = /^date/i.test(lines[0]) ? 1 : 0;
+  const rows = [];
+  for (let i = start; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    if (parts.length < 2) throw new Error(`Invalid row on line ${i + 1}: "${lines[i]}"`);
+    const date  = parts[0].trim();
+    const count = parseInt(parts[1].trim(), 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`Invalid date "${date}" on line ${i + 1}.`);
+    if (isNaN(count) || count < 0) throw new Error(`Invalid count on line ${i + 1}.`);
+    rows.push({ date, count });
+  }
+  if (rows.length === 0) throw new Error('No data rows found in the file.');
+  return rows;
+}
+
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
 function app() {
   return {
-    route:   '/',
-    loading: false,
-    error:   null,
+    route:    '/',
+    loading:  false,
+    error:    null,
+    darkMode: false,
 
     init() {
+      // Dark mode: restore from localStorage, fall back to system preference
+      const saved = localStorage.getItem('darkMode');
+      this.darkMode = saved !== null
+        ? saved === 'true'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this._applyDark();
+
       // Initial route
       this.navigate(this._parseHash());
       // Listen for hash changes
       window.addEventListener('hashchange', () => {
         this.navigate(this._parseHash());
       });
+    },
+
+    _applyDark() {
+      document.documentElement.classList.toggle('dark', this.darkMode);
+    },
+
+    toggleDark() {
+      this.darkMode = !this.darkMode;
+      localStorage.setItem('darkMode', this.darkMode);
+      this._applyDark();
     },
 
     _parseHash() {
@@ -83,25 +123,36 @@ let _currentMonth = new Date().getMonth() + 1; // 1-indexed
 
 async function renderDashboard() {
   const today = todayStr();
-  const [todayRecord, goal, monthSteps] = await Promise.all([
+  const [todayRecord, goal, yearSteps] = await Promise.all([
     getStepByDate(today),
     getGoalForYear(new Date().getFullYear()),
-    getStepsForMonth(new Date().getFullYear(), new Date().getMonth() + 1),
+    getStepsForYear(new Date().getFullYear()),
   ]);
 
   const year  = new Date().getFullYear();
   const month = new Date().getMonth() + 1;
   const dGoal = goal ? dailyGoal(goal.target, year) : 0;
   const todayCount = todayRecord ? todayRecord.count : 0;
-  const pct = dGoal > 0 ? Math.min(100, (todayCount / dGoal) * 100) : 0;
 
-  // Week (Mon–today)
+  // Derive month steps from year steps
+  const mFrom      = `${year}-${String(month).padStart(2, '0')}-01`;
+  const mTo        = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+  const monthSteps = yearSteps.filter(r => r.date.slice(0, 10) >= mFrom && r.date.slice(0, 10) <= mTo);
+
+  // Year progress
+  const yearProg = goal ? computeYearlyProgress(yearSteps, dGoal, year) : null;
+  const yearPct  = yearProg ? Math.min(100, yearProg.pctCompletion) : 0;
+  const yearRingColor = !yearProg ? '#3b82f6'
+    : yearPct >= 100 ? '#22c55e'
+    : yearProg.aheadBehind >= 0 ? '#3b82f6' : '#ef4444';
+
+  // Week (Mon–today) — use yearSteps so week can span month boundary
   const todayDate = new Date();
   const dow = todayDate.getDay();
   const daysBack = dow === 0 ? 6 : dow - 1;
   const weekStart = new Date(todayDate);
   weekStart.setDate(weekStart.getDate() - daysBack);
-  const weekSteps = monthSteps.filter(r => {
+  const weekSteps = yearSteps.filter(r => {
     const d = parseDate(r.date);
     return d >= weekStart && d <= todayDate;
   }).reduce((s, r) => s + r.count, 0);
@@ -126,47 +177,53 @@ async function renderDashboard() {
         </button>
       </div>
 
-      <!-- Progress ring + count -->
+      <!-- Year progress ring + ahead/behind -->
       <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4 flex items-center gap-6">
         <!-- Ring -->
         <div class="relative flex-shrink-0">
           <svg width="96" height="96" viewBox="0 0 96 96">
             <circle cx="48" cy="48" r="40" fill="none" stroke="#f3f4f6" stroke-width="10"/>
             <circle cx="48" cy="48" r="40" fill="none"
-              stroke="${pct >= 100 ? '#22c55e' : '#3b82f6'}" stroke-width="10"
+              stroke="${yearRingColor}" stroke-width="10"
               stroke-linecap="round"
               stroke-dasharray="${2 * Math.PI * 40}"
-              stroke-dashoffset="${2 * Math.PI * 40 * (1 - pct / 100)}"
+              stroke-dashoffset="${2 * Math.PI * 40 * (1 - yearPct / 100)}"
               class="progress-ring-circle"/>
           </svg>
           <span class="absolute inset-0 flex items-center justify-center text-base font-bold text-gray-800">
-            ${Math.round(pct)}%
+            ${Math.round(yearPct)}%
           </span>
         </div>
-        <!-- Count -->
-        <div>
-          <p class="text-4xl font-extrabold text-gray-900">${fmtNum(todayCount)}</p>
-          <p class="text-sm text-gray-500 mt-1">
-            ${dGoal > 0 ? `Goal: ${fmtNum(dGoal)} steps/day` : '<span class="text-amber-500">No goal set for this year</span>'}
-          </p>
+        <!-- Year info -->
+        <div class="min-w-0">
+          <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">${year} &middot; Yearly pace</p>
+          ${yearProg
+            ? `<p class="text-3xl font-extrabold ${yearProg.aheadBehind >= 0 ? 'text-green-600' : 'text-red-500'}">
+                ${yearProg.aheadBehind >= 0 ? '+' : ''}${fmtNum(yearProg.aheadBehind)}
+               </p>
+               <p class="text-sm text-gray-500 mt-0.5">
+                 ${yearProg.aheadBehind >= 0 ? 'ahead of yearly pace' : 'behind yearly pace'}
+               </p>
+               <p class="text-xs text-gray-400 mt-1">${fmtNum(yearProg.actualYTD)} of ${fmtNum(yearProg.yearGoal)} steps</p>`
+            : `<p class="text-sm text-amber-500 mt-1">No goal set for this year</p>`
+          }
         </div>
       </div>
 
       <!-- Mini summary cards -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        ${summaryCard('Today', fmtNum(todayCount) + ' steps',
+            dGoal > 0 ? `Goal: ${fmtNum(dGoal)}/day` : '')}
         ${summaryCard('This week', fmtNum(weekSteps) + ' steps', '')}
         ${monthProgress
           ? summaryCard('Month total', fmtNum(monthProgress.actualTotal) + ' steps',
               `${Math.round(monthProgress.pctCompletion)}% of goal`)
           : summaryCard('Month total', '—', '')}
         ${monthProgress
-          ? summaryCard('Ahead / behind',
+          ? summaryCard('Month pace',
               (monthProgress.aheadBehind >= 0 ? '+' : '') + fmtNum(monthProgress.aheadBehind),
               monthProgress.aheadBehind >= 0 ? 'text-green-600' : 'text-red-500')
-          : summaryCard('Ahead / behind', '—', '')}
-        ${monthProgress
-          ? summaryCard('Days on goal', `${monthProgress.completedDays} / ${monthProgress.currentDay}`, '')
-          : summaryCard('Days on goal', '—', '')}
+          : summaryCard('Month pace', '—', '')}
       </div>
 
       <!-- Step modal -->
@@ -641,12 +698,14 @@ async function renderStats() {
 async function renderSettings() {
   const goals = await getAllGoals();
 
-  const rows = goals.map(g => `
-    <tr class="border-t border-gray-100 hover:bg-gray-50" x-data="goalRowComp('${g.id}', ${g.year}, ${g.target})">
+  const rows = goals.map(g => {
+    const dailyTarget = Math.round(g.target / daysInYear(g.year));
+    return `
+    <tr class="border-t border-gray-100 hover:bg-gray-50" x-data="goalRowComp('${g.id}', ${g.year}, ${dailyTarget})">
       <td class="py-2 px-3 text-sm text-gray-700">${g.year}</td>
       <td class="py-2 px-3 text-sm">
         <template x-if="!editing">
-          <span class="font-medium">${fmtNum(g.target)}</span>
+          <span class="font-medium">${fmtNum(dailyTarget)}</span>
         </template>
         <template x-if="editing">
           <input type="number" x-model.number="editTarget" min="0"
@@ -671,7 +730,8 @@ async function renderSettings() {
         </template>
       </td>
       <td class="py-2 px-3 text-xs text-red-500" x-text="rowError"></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const el = document.getElementById('view-settings');
   el.innerHTML = `
@@ -689,10 +749,10 @@ async function renderSettings() {
               class="border border-gray-300 rounded-lg px-3 py-2 w-24 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label class="block text-xs text-gray-500 mb-1">Total steps target</label>
+            <label class="block text-xs text-gray-500 mb-1">Daily goal (steps/day)</label>
             <input type="number" x-model.number="newTarget" min="0"
               class="border border-gray-300 rounded-lg px-3 py-2 w-36 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. 3650000" @keydown.enter="addGoal()" />
+              placeholder="e.g. 10000" @keydown.enter="addGoal()" />
           </div>
           <button @click="addGoal()"
             class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -709,7 +769,7 @@ async function renderSettings() {
           <thead class="bg-gray-50">
             <tr>
               <th class="py-2 px-3 text-xs font-semibold text-gray-500 text-left">Year</th>
-              <th class="py-2 px-3 text-xs font-semibold text-gray-500 text-left">Target (steps)</th>
+              <th class="py-2 px-3 text-xs font-semibold text-gray-500 text-left">Daily goal (steps/day)</th>
               <th class="py-2 px-3 text-xs font-semibold text-gray-500 text-left">Actions</th>
               <th class="py-2 px-3"></th>
             </tr>
@@ -719,24 +779,100 @@ async function renderSettings() {
       </div>
       ` : '<p class="text-gray-400 text-sm">No goals set yet.</p>'}
 
+      <!-- Import / Export -->
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mt-6">
+        <h2 class="text-sm font-semibold text-gray-700 mb-4">Import / Export steps</h2>
+        <div class="flex flex-col sm:flex-row gap-6">
+          <div class="flex-1">
+            <p class="text-xs text-gray-500 mb-2">Download all step records as a CSV file (columns: <code>date</code>, <code>count</code>).</p>
+            <button @click="exportCSV()"
+              class="bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              Export CSV
+            </button>
+          </div>
+          <div class="hidden sm:block w-px bg-gray-200"></div>
+          <div class="flex-1">
+            <p class="text-xs text-gray-500 mb-2">Import from a CSV file (<code>date</code>, <code>count</code>). Existing entries are overwritten.</p>
+            <div class="flex gap-2 items-center">
+              <label class="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                Choose file
+                <input type="file" accept=".csv,text/csv" class="hidden" @change="handleImport(\$event)" :disabled="importing" />
+              </label>
+              <span x-show="importing" class="text-xs text-gray-500">Importing&#8230;</span>
+            </div>
+            <template x-if="importResult">
+              <div class="mt-3 text-sm">
+                <p class="text-green-700" x-show="importResult.created > 0 || importResult.updated > 0">
+                  Done: <span x-text="importResult.created"></span> created, <span x-text="importResult.updated"></span> updated.
+                </p>
+                <template x-if="importResult.errors && importResult.errors.length > 0">
+                  <div>
+                    <p class="text-red-500 text-xs mt-1">Some rows had errors:</p>
+                    <ul class="text-red-500 text-xs list-disc list-inside mt-1">
+                      <template x-for="err in importResult.errors" :key="err">
+                        <li x-text="err"></li>
+                      </template>
+                    </ul>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
     </div>
   `;
 
   window.settingsComp = function() {
     return {
-      newYear:   new Date().getFullYear(),
-      newTarget: null,
-      addError:  null,
+      newYear:      new Date().getFullYear(),
+      newTarget:    null,
+      addError:     null,
+      importing:    false,
+      importResult: null,
 
       init() {},
+
+      exportCSV() {
+        getStepsAsCSV().then(csv => {
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href     = url;
+          a.download = 'steps.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+      },
+
+      async handleImport(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        this.importResult = null;
+        this.importing    = true;
+        try {
+          const text = await file.text();
+          const rows = parseStepsCSV(text);
+          this.importResult = await importStepsFromRows(rows);
+        } catch (e) {
+          this.importResult = { created: 0, updated: 0, errors: [e.message] };
+        } finally {
+          this.importing = false;
+          event.target.value = '';
+        }
+      },
 
       async addGoal() {
         this.addError = null;
         if (!this.newTarget || this.newTarget <= 0) {
-          this.addError = 'Please enter a valid target.'; return;
+          this.addError = 'Please enter a valid daily goal.'; return;
         }
         try {
-          await createGoal(this.newYear, this.newTarget);
+          const yearlyTotal = Math.round(this.newTarget * daysInYear(this.newYear));
+          await createGoal(this.newYear, yearlyTotal);
           this.newTarget = null;
           await renderSettings();
         } catch (e) {
@@ -755,9 +891,10 @@ async function renderSettings() {
 
       async save() {
         this.rowError = null;
-        if (this.editTarget <= 0) { this.rowError = 'Invalid target.'; return; }
+        if (this.editTarget <= 0) { this.rowError = 'Invalid daily goal.'; return; }
         try {
-          await updateGoal(this.id, this.editTarget);
+          const yearlyTotal = Math.round(this.editTarget * daysInYear(this.year));
+          await updateGoal(this.id, yearlyTotal);
           this.editing = false;
           await renderSettings();
         } catch (e) {
