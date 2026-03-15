@@ -34,4 +34,4 @@ jobs:
           context: .
           platforms: linux/arm64
           push: ${{ github.event_name == 'push' }}
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }},ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:latest
