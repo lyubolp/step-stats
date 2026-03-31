@@ -122,11 +122,12 @@ function computeYearlyProgress(steps, dailyGoalValue, year, today = new Date()) 
   const yearGoal    = dailyGoalValue * daysInYear(year);
   const actualYTD   = steps.reduce((s, r) => s + r.count, 0);
 
-  // Days elapsed from Jan 1 to today (inclusive), capped to days in year
-  const jan1        = new Date(year, 0, 1);
-  const todayLocal  = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // Days elapsed from Jan 1 to today (inclusive), capped to days in year.
+  // Use Date.UTC to avoid DST skew — UTC days are always exactly 86400000 ms.
+  const jan1UTC     = Date.UTC(year, 0, 1);
+  const todayUTC    = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const daysElapsed = Math.min(
-    Math.floor((todayLocal - jan1) / 86400000) + 1,
+    Math.floor((todayUTC - jan1UTC) / 86400000) + 1,
     daysInYear(year)
   );
 
@@ -266,9 +267,9 @@ function computeBiggestStreak(allSteps, dailyGoalValue) {
   let curLen      = 1;
 
   for (let i = 1; i < qualifying.length; i++) {
-    const prev = parseDate(qualifying[i - 1]);
-    const curr = parseDate(qualifying[i]);
-    const diff = (curr - prev) / 86400000;
+    const [py, pm, pd] = qualifying[i - 1].split('-').map(Number);
+    const [cy, cm, cd] = qualifying[i].split('-').map(Number);
+    const diff = (Date.UTC(cy, cm - 1, cd) - Date.UTC(py, pm - 1, pd)) / 86400000;
 
     if (diff === 1) {
       curLen++;
