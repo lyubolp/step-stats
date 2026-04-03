@@ -161,6 +161,9 @@ async function renderDashboard() {
     ? computeMonthlyProgress(monthSteps, dGoal, year, month)
     : null;
 
+  // Current streak: consecutive days up to (and including) yesterday meeting the goal
+  const currentStreak = dGoal > 0 ? computeCurrentStreak(yearSteps, dGoal) : 0;
+
   const el = document.getElementById('view-dashboard');
   el.innerHTML = `
     <div x-data="dashboardComp()" x-init="init()">
@@ -211,7 +214,7 @@ async function renderDashboard() {
       </div>
 
       <!-- Mini summary cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         ${summaryCard('Today', fmtNum(todayCount) + ' steps',
             dGoal > 0 ? `Goal: ${fmtNum(dGoal)}/day` : '')}
         ${summaryCard('This week', fmtNum(weekSteps) + ' steps', '')}
@@ -224,6 +227,9 @@ async function renderDashboard() {
               (monthProgress.aheadBehind >= 0 ? '+' : '') + fmtNum(monthProgress.aheadBehind),
               monthProgress.aheadBehind >= 0 ? 'text-green-600' : 'text-red-500')
           : summaryCard('Month pace', '—', '')}
+        ${dGoal > 0
+          ? summaryCard('🔥 Streak', currentStreak + (currentStreak === 1 ? ' day' : ' days'), 'days in a row')
+          : summaryCard('🔥 Streak', '—', '')}
       </div>
 
       <!-- Step modal -->

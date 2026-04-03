@@ -285,6 +285,36 @@ function computeBiggestStreak(allSteps, dailyGoalValue) {
 }
 
 /**
+ * Compute the current streak: consecutive days ending yesterday where steps >= dailyGoal.
+ * Today is excluded from the calculation entirely.
+ *
+ * @param {Array}  allSteps       - step records (any range)
+ * @param {number} dailyGoalValue
+ * @param {Date}   [today]        - override for testing; defaults to new Date()
+ * @returns {number} streak length in days
+ */
+function computeCurrentStreak(allSteps, dailyGoalValue, today = new Date()) {
+  const todayStr = formatDate(today);
+
+  const qualifyingSet = new Set(
+    allSteps
+      .filter(r => r.count >= dailyGoalValue && r.date.slice(0, 10) !== todayStr)
+      .map(r => r.date.slice(0, 10))
+  );
+
+  let streak = 0;
+  const cursor = new Date(today);
+  cursor.setDate(cursor.getDate() - 1); // start from yesterday
+
+  while (qualifyingSet.has(formatDate(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+/**
  * Bundle all all-time stats into one call.
  */
 function computeAllTimeStats(allSteps, dailyGoalValue) {
