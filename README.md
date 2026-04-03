@@ -1,6 +1,11 @@
 # step-stats
 A small app for tracking steps
 
+## Known Limitations
+
+### Current streak across New Year
+The dashboard streak counter uses only the current year's step data. If a streak spans New Year's Eve into January 1st, only the January portion will be counted.
+
 ## CSV Import / Export
 
 Step data can be exported and imported as a CSV file from the **Settings** page.
